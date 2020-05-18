@@ -2,16 +2,114 @@
 #Autor: Jovanny Ramirez Chimal
 
 
+showNICS() {
+	dladm show_phys
+	read -p "Choose a Network Adapter: " nat
+	echo $nat
+}
+
+# Funcion que configura un tarjeta de red
+# Params: $1 es el nombre del adaptador 
+configDHCP () {
+	nat = $1
+	output = "$(ipadm create-ip $nat)"
+	ipadm create-addr -T dhcp $nat/v4
+	ipadm show-addr | grep $nat/v4
+}
+
+configIPV6 () {
+	nat $1
+	ouput = "$(ipadm crate-ip $nat)"
+	ipadm create-addr -T addrconf $nat/v6
+	ipadm show-addr | grep $nat/v6
+}
+
+network () {
+	while :
+	do
+		clear 
+		echo "___________________________________________________________"
+		echo "			Networking config			 "	
+		echo "___________________________________________________________"
+		echo " 1.- Show Network's Adapters"
+		echo " 2.- Show Network's Addresses"
+		echo " 3.- Create a static IP"
+		echo " 4.- Create an IP using DHCP with IPv4"
+		echo " 5.- Config all NICs by DHCP with IPv4"
+		echo " 6.- Create an IP using DHCP with IPv6"
+		echo " 7.- Config all NICs by DHCP with IPv6"
+		echo " 8.- Delete a IP address"
+		echo " 9.- Exit"
+		read -n1 -p "Type a number: " opc
+		clear
+		case $opc in
+			1)
+				dladm show-phys
+				;;
+			2) 	
+				ipadm show-addr
+				;;
+			3) 	
+				echo "		Create a static IP"
+				nat = "$(showNICS)"
+				read -p "Enter the IP (IPv4) address: " ip
+				output = "$(ipadm create-ip $nat)"
+				ipadm create-addr -T static -a local=$ip $nat/v4
+				ipadm show-addr | grep $nat/v4
+				;;
+			4) 	
+				echo "		Create an IP address by DHCP with IPv4"
+				nat = "$(showNICS)"
+				configDHCP $nat
+				;;		
+			5)	
+				echo " 		Configuring all NICs by DHCP with IPv4"
+				configDHCP nat0
+				configDHCP nat1
+				configDHCP nat2
+				configDHCP nat3
+				;;
+			6) 
+				echo "		Craete an IP address by DHCP with IPv6"
+				nat = "$(showNICS)"
+				configIPV6 $nat
+				;;
+
+			7) 
+				echo "		Configuring all NICs by DHCP with IPv6"
+				configIPV6 nat0
+				configIPV6 nat1
+				configIPV6 nat2
+				configIPV6 nat3
+				;;
+			8) 
+				echo " 		Delete a IP address"
+				ipadm show-addr
+				read -p "Type the Address Objetc" addr
+				ipadm delete-addr $addr
+				ipadm show-addr
+				;;
+			9) 
+				break
+				;;
+		esac
+
+		read -n1 -p "Press any key to continue..." a
+	done
+
+}
+
+
 dns () {
 	while :
 	do
 		clear 
 		echo "___________________________________________________________"
-		echo "                  Configuracion del DNS"
+		echo "                 DNS Config "
 		echo "___________________________________________________________"
-		echo "1.- Configurar dominio	"
-		echo "2.- Agregar dominio"
-		read -n1 -p "Elija una opcion" opc
+		echo "1.- Add domain	"
+		echo "2.- Add"
+		read -n1 -p "Type a number: " opc
 		case $opc in 
 			1)
 				read -p "Ingrese el dominio" dominio
@@ -23,51 +121,67 @@ dns () {
 	done
 }
 
+chooseService () {
+	echo "1.- IPv4"
+	echo "2.- IPv6"
+	read -p "Type an option" opc
+	echo "opc"
+}
+
 dhpc () {
 	while :
 	do
 		clear
 		echo "____________________________________________________________"
-		echo "			Configuracion del DCHP			  "
+		echo "			 DCHP Config			  "
 		echo "___________________________________________________________ "
-		echo "1.- Mostrar direcciones IP"
-		echo "2.- Mostrar Adaptadores de red"
-		echo "3.- Crear direccion IP estatica"
-		echo "4.- Crear direccion via DHCP"
-		echo "5.- Asignar todas los adaptadores por DHCP"
-		echo "6.- Bajar adaptador de red"
-		echo "7.- Eliminar direccion ipv4"
-		echo "8.- Bajar todas los adaptadores de Red"
-		echo "9.- Salir"
-		read -n1 -p "Elija opcion" opc
+		echo "1.- Show state servers DHCP"
+		echo "2.- Set disable service DHCP"
+		echo "3.- Set enable service DHCP"
+		echo "4.- Config dhcpd4.conf file "
+		read -p "Type a number" opc
+		
 		case $opc in 
-			1) 
-				ipadm show-addr
+			1) 	svcs | grep dhcp
 				;;
-			2)	
-				dladm show-phys
+			2) 	ipv = "$(chooseService)"
+				if ["$ipv" == "1"]; then 
+					svcadm enable /network/dhcp/server:ipv4
+				else 
+					svcadm enable /network/dhcp/server:ipv6
+				fi
 				;;
-			3)	
-				dladm show-phys | grep v4
-				read -p "Ingrese adaptador de red" adaptador
-				read -p "Ingrese direccion IPV4" ip
-				ipadm create-ip -T static -a local=$ip $adaptador/v4
-				echo "La direccion asignada es"
-				ipadm show-addr | grep $adaptador/v4
+			3) 	ipv = "$(chooseService)"
+				if ["$ipv" == "1"]; then 
+					svcadm disable /network/dhcp/server:ipv4
+				else 
+					svcadm disable /network/dhcp/server:ipv6
+				fi
 				;;
 			4)
-				dladm show-phys | grep v4
-				read -p "Ingrese adaptador" adaptador
-				ipadm create-ip -T dhcp $adaptador/v4
-				echo "La direccion asignada es"
-				ipadm show-addr | grep $adaptador/v4
-				;;
-			9) 
-				break
+				echo "		Config dhcpd4.conf file"
+				read -p "Enter the subnet: " subnet
+				read -p "Enter the netmask: " netmask
+				read -p "Enter the interface: " interface
+				read -p "Enter the min range value: " r1
+				read -p "Enter the max range value: " r2
+				read -p "Enter the address routers: " router
+				read -p "Enter the broadcast address: " broadcast
+				file = "/etc/inet/dhcpd4.conf"
+				touch $file
+				echo "subnet $subnet netmask $netmask {" > $file
+				echo "		interface $interface; " >> $file
+				echo "		range $r1 $r2; " >> $file
+				echo "		option routers $router; " >> $file
+				echo "		option broadcast-address $broadcast" >> $file
+				echo "}" >> $file
+
+				echo "All changes saved..."
 				;;
 		esac
+
 		echo -e "/n"
-		read -p "Presione una tecla para continuar" mm
+		read -p "Type a key to continue" key
 
 	done
 }
